@@ -172,15 +172,6 @@ def add_events(a, b, li, min_clip_len, min_cigar_event_length=10, min_mapping_qu
                 if op in CONSUME_REF:
                     offset += length
 
-        # TODO: move this to soft_and_ins so we can drop all tags and save memory
-        # also require calling soft_and_ins earlier
-        if aln.has_tag("SA"):
-            sa_tag = aln.get_tag("SA")
-
-            for sa in sa_tag.strip(';').split(";"):
-                add_split_event(aln, sa, li, min_mapping_quality, self_left, self_right)
-                #break # only add first split read event.
-
 
     if a.mapping_quality < min_mapping_quality and b.mapping_quality < min_mapping_quality: return
     if proper_pair(a, max_insert_size): return
@@ -264,8 +255,16 @@ def soft_and_ins(aln, li, events2d, min_event_len, min_mapping_quality=15, high_
             pass
 
     if cigar is None or len(cigar) < 2: return
-    if cigar[0][0] == BAM_CSOFT_CLIP and cigar[-1][0] == BAM_CSOFT_CLIP:
+    if aln.mapping_quality > 0 and cigar[0][0] == BAM_CSOFT_CLIP and cigar[-1][0] == BAM_CSOFT_CLIP:
         events2d.append((chrom, aln.reference_start, chrom, aln.reference_end, Event.SOFT_BOTH, aln.qname))
+
+
+    if aln.has_tag("SA"):
+        sa_tag = aln.get_tag("SA")
+
+        for sa in sa_tag.strip(';').split(";"):
+            add_split_event(aln, sa, events2d, min_mapping_quality, cigar[0][0] == BAM_CSOFT_CLIP, cigar[-1][0] == BAM_CSOFT_CLIP)
+            #break # only add first split read event.
 
     if aln.mapping_quality < min_mapping_quality: return
     # check each end of read
@@ -325,7 +324,7 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
     for i, b in enumerate(bam): # TODO add option to iterate over VCF of putative SV sites.
 
         if i == 2000000 or (i % 10000000 == 0 and i > 0):
-            print(f"[sv-channels] i:{i} ({b.reference_name}:{b.reference_start}) processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)} reads/second:{i/(time.time() - t0):.0f}", file=sys.stderr)
+            print(f"[sv-channels] i:{i} ({b.reference_name}:{b.reference_start}) processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)} 1d-events:{len(softs)} reads/second:{i/(time.time() - t0):.0f}", file=sys.stderr)
             sys.stderr.flush()
 
         if not debug:
@@ -343,17 +342,17 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
             processed_pairs += 1
             a = pairs.pop(b.query_name)
             soft_and_ins(a, softs, events, min_clip_len, min_mapping_quality, high_nm)
-            soft_and_ins(b, softs, events, min_clip_len, min_mapping_quality, high_nm)
             add_events(a, b, events, min_clip_len, min_cigar_event_length=10, max_insert_size=max_insert_size)
         else:
             # we dont use sequence or base-qualities so set them to empty to reduce memory.
             # only do it for stuff that's far away.
+            soft_and_ins(b, softs, events, min_clip_len, min_mapping_quality, high_nm)
             if b.reference_id != b.next_reference_id or (b.next_reference_start - b.reference_start) > 100000:
               b.query_sequence = None
               b.query_qualities = None
             pairs[b.query_name] = b
 
-    print(f"[sv-channels] processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)}", file=sys.stderr)
+    print(f"[sv-channels] processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)} 1d-events:{len(softs)}", file=sys.stderr)
     write_depths(depths, outdir)
     if not debug:
         chop(softs, 3, chop_mod)
