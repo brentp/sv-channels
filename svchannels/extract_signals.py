@@ -340,8 +340,8 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
 
         if b.query_name in pairs:
             processed_pairs += 1
+            soft_and_ins(b, softs, events, min_clip_len, min_mapping_quality, high_nm)
             a = pairs.pop(b.query_name)
-            soft_and_ins(a, softs, events, min_clip_len, min_mapping_quality, high_nm)
             add_events(a, b, events, min_clip_len, min_cigar_event_length=10, max_insert_size=max_insert_size)
         else:
             # we dont use sequence or base-qualities so set them to empty to reduce memory.
