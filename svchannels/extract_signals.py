@@ -347,9 +347,11 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
             # we dont use sequence or base-qualities so set them to empty to reduce memory.
             # only do it for stuff that's far away.
             soft_and_ins(b, softs, events, min_clip_len, min_mapping_quality, high_nm)
-            if b.reference_id != b.next_reference_id or (b.next_reference_start - b.reference_start) > 100000:
+            if b.reference_id != b.next_reference_id or (b.next_reference_start - b.reference_start) > 2000:
               b.query_sequence = None
               b.query_qualities = None
+              b.set_tags([])
+              b = b.__copy__()
             pairs[b.query_name] = b
 
     print(f"[sv-channels] processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)} 1d-events:{len(softs)}", file=sys.stderr)
