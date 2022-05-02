@@ -298,7 +298,7 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
 
     # keep reads in here. only do anything with pairs. if a read is already in
     # here we have a pair since we are skipping supplementary and secondary.
-    pairs = {} 
+    pairs = {}
 
     chrom_lengths = dict(zip(bam.references, bam.lengths))
 
@@ -314,8 +314,9 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
     # add here, then when it gets large-enough we can do something faster.
     for i, b in enumerate(bam): # TODO add option to iterate over VCF of putative SV sites.
 
-        if i == 2000000 or (i % 2000000 == 0 and i > 0):
+        if i == 2000000 or (i % 5000000 == 0 and i > 0):
             print(f"[sv-channels] i:{i} ({b.reference_name}:{b.reference_start}) processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)} reads/second:{i/(time.time() - t0):.0f}", file=sys.stderr)
+            sys.stderr.flush()
             # removing the debugging stuff, otherwise memory ballons.
             if not debug:
                 chop(softs, 3)
@@ -335,6 +336,9 @@ def iterate(bam, fai, outdir="sv-channels", min_clip_len=14,
             soft_and_ins(b, softs, events, min_clip_len, min_mapping_quality, high_nm)
             add_events(a, b, events, min_clip_len, min_cigar_event_length=10, max_insert_size=max_insert_size)
         else:
+            # we dont use sequence or base-qualities so set them to empty to reduce memory.
+            b.query_sequence = None
+            b.query_qualities = None
             pairs[b.query_name] = b
 
     print(f"[sv-channels] processed-pairs:{processed_pairs} len pairs:{len(pairs)} events:{len(events)}", file=sys.stderr)
